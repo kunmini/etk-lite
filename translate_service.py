@@ -357,9 +357,15 @@ class TranslateService:
 
         # 1. 扫描全库人物（分页）
         start = 0
-        batch = 500
+        batch = 5000
         name_to_ids: Dict[str, list] = {}
         while True:
+            from task_queue import task_queue as _tq
+            if _tq.is_cancelled():
+                logger.info(f"⏹ 人物扫描被用户停止（已扫 {result['scanned']} 人）")
+                result["cancelled"] = True
+                result["cancelled_at"] = result["scanned"]
+                break
             persons, total = self.emby.get_persons(start=start, limit=batch)
             if not persons:
                 break
@@ -372,16 +378,15 @@ class TranslateService:
                     result["skipped_cn"] += 1
                     continue
                 name_to_ids.setdefault(name, []).append(p.get("Id"))
+            # 进度无条件同步到全局任务状态（progress_cb 可能为 None）
+            pct = min(int(result["scanned"] / max(total, 1) * 40), 40)
+            txt = f"扫描人物 {result['scanned']}/{total}（待翻译 {len(name_to_ids)} 个名字）"
             if progress_cb:
-                progress_cb(min(int(result["scanned"] / max(total, 1) * 40), 40),
-                            f"扫描人物 {result['scanned']}/{total}")
-                try:
-                    from task_queue import task_queue as _tq
-                    _tq.set_progress_current(
-                        min(int(result["scanned"] / max(total, 1) * 40), 40),
-                        f"扫描人物 {result['scanned']}/{total}")
-                except Exception:
-                    pass
+                progress_cb(pct, txt)
+            try:
+                _tq.set_progress_current(pct, txt)
+            except Exception:
+                pass
             start += batch
             if start >= total or (limit and result["scanned"] >= limit):
                 break
@@ -399,7 +404,8 @@ class TranslateService:
             if task_queue.is_cancelled():
                 logger.info(f"⏹ 人物翻译被用户停止（已处理 {i}/{len(all_names)}）")
                 result["cancelled"] = True
-                result["cancelled_at"] = i
+                if "cancelled_at" not in result:  # 扫描阶段已记录停止点则不覆盖
+                    result["cancelled_at"] = i
                 break
             batch_names = all_names[i:i + bsize]
             try:
@@ -426,17 +432,16 @@ class TranslateService:
                         result["failed"] += 1
                 if len(result["samples"]) < 5:
                     result["samples"].append(f"{orig} → {translated}")
+            pct2 = min(40 + int((i + bsize) / len(all_names) * 60), 99)
+            txt2 = f"翻译写回 {min(i+bsize, len(all_names))}/{len(all_names)}"
             if progress_cb:
-                progress_cb(min(40 + int((i + bsize) / len(all_names) * 60), 99),
-                            f"翻译写回 {min(i+bsize, len(all_names))}/{len(all_names)}")
-                # 同步到全局任务状态（UI 进度条）
-                try:
-                    from task_queue import task_queue as _tq
-                    _tq.set_progress_current(
-                        min(40 + int((i + bsize) / len(all_names) * 60), 99),
-                        f"翻译写回 {min(i+bsize, len(all_names))}/{len(all_names)}")
-                except Exception:
-                    pass
+                progress_cb(pct2, txt2)
+            # 同步到全局任务状态（UI 进度条）——progress_cb 可能为 None，必须无条件同步
+            try:
+                from task_queue import task_queue as _tq
+                _tq.set_progress_current(pct2, txt2)
+            except Exception:
+                pass
         if progress_cb:
             progress_cb(100, f"完成: 更新 {result['updated']} 个")
             try:

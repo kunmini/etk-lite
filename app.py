@@ -79,7 +79,7 @@ table td{max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowr
 </style>
 </head>
 <body>
-<h1>🎬 ETK 精简版 · Emby 翻译 <span class="tip">v5.11</span></h1>
+<h1>🎬 ETK 精简版 · Emby 翻译 <span class="tip">v5.12</span></h1>
 <div class="tip">服务地址: <span id="server_addr"></span> ｜ webhook: <span id="webhook_addr"></span>/webhook/emby（Emby 后台 → Webhook 插件 → 勾选"媒体库新增内容"即可实时翻译新片）</div>
 
 <div class="tabs">
@@ -199,7 +199,8 @@ table td{max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowr
     <h2>🎭 全库人物名翻译</h2>
     <button class="btn red" onclick="startPersons()">🎭 翻译全部人物</button>
     <button class="btn gray" onclick="scanPersons()">🔍 人物扫描统计</button>
-    <div class="tip">扫描 Emby 全部演员/导演/客串 → 非中文名 AI 翻译 → 官方 API 写回（无需插件）</div>
+    <div class="tip">「翻译全部人物」：扫描全库所有演员/导演/客串名 → 非中文名 AI 翻译 → 官方 API 写回（耗时较长，后台执行，可在任务页看进度/停止）</div>
+    <div class="tip">「人物扫描统计」：只读抽样统计全库有多少名字待翻译，<b>不翻译不写回</b>（几秒出结果）</div>
     <div id="person_stats" class="tip"></div>
   </div>
 </div>
@@ -589,17 +590,20 @@ async function startPersons() {
   refreshTasks();
 }
 async function scanPersons() {
-  document.getElementById('person_stats').textContent = '扫描中...';
-  const r = await api('/api/persons/scan?limit=5000');
+  document.getElementById('person_stats').textContent = '统计中（等距抽样全库 8 段，几秒出结果）...';
+  const r = await api('/api/persons/scan');
   if (r.success && r.data) {
-    const total = r.data.total_persons || r.data.scanned;
-    const remain = Math.max(0, r.data.need_translate || 0);
-    let msg = `👥 人物统计: 扫描 ${r.data.scanned} / 全库 ${total} 人`;
-    msg += ` | 已是中文 ${r.data.skipped_cn}`;
-    msg += ` | 🔴 还有 ${remain} 个名字待翻译`;
+    const total = r.data.total_persons || 0;
+    const est = r.data.estimated_total || 0;
+    const scanned = r.data.scanned || 0;
+    const cn = r.data.skipped_cn || 0;
+    let msg = `👥 人物统计（抽样 ${scanned} 人，估算全库 ${total} 人）`;
+    msg += `\\n📊 样本中已是中文 ${cn} 人，非中文名 ${r.data.need_translate || 0} 个`;
+    msg += `\\n🔴 估算全库约 ${est} 个名字待翻译`;
     if (r.data.samples && r.data.samples.length) {
-      msg += `\n示例: ${r.data.samples.slice(0, 5).join('、')}${r.data.samples.length > 5 ? '...' : ''}`;
+      msg += `\\n示例: ${r.data.samples.slice(0, 5).join('、')}${r.data.samples.length > 5 ? '...' : ''}`;
     }
+    msg += '\\n（抽样统计为估算值；要实际翻译请点上方「翻译全部人物」）';
     document.getElementById('person_stats').textContent = msg;
   } else {
     document.getElementById('person_stats').textContent = '扫描失败';
@@ -846,24 +850,44 @@ def translate_persons():
 
 @app.route("/api/persons/scan", methods=["GET"])
 def scan_persons():
-    """快速采样扫描统计（只读前 N 人估算，不翻译不写回）"""
+    """多点等距采样统计（只读，不翻译不写回）。
+    Emby /Persons 按名字排序，前段全是已中文名——只采前 N 人会严重低估待翻译数，
+    必须等距取全库各段样本估算（2026-08-17 实测：前 5000 人 99% 中文，
+    但全库实际 19.9 万名字待翻译，采样前段会误报"只剩 40 个"）。
+    """
     service = get_service()
-    result = {"scanned": 0, "need_translate": 0, "skipped_cn": 0, "samples": []}
-    sample_limit = int(request.args.get("limit", 2000))
-    persons, total = service.emby.get_persons(0, sample_limit)
-    need_names = {}
-    for p in persons or []:
-        result["scanned"] += 1
-        name = p.get("Name") or ""
-        if not name:
-            continue
-        if service._has_cn(name):
-            result["skipped_cn"] += 1
-        else:
-            need_names.setdefault(name, 0)
-    result["total_persons"] = total
-    result["need_translate"] = len(need_names)
-    result["samples"] = list(need_names.keys())[:10]
+    result = {"scanned": 0, "need_translate": 0, "skipped_cn": 0, "samples": [],
+              "estimated_total": 0, "total_persons": 0, "sample_points": 0,
+              "mode": "multipoint"}
+    service.emby.login()
+    # 先取全库总数
+    _, total = service.emby.get_persons(0, 1)
+    result["total_persons"] = total or 0
+    if not total:
+        return jsonify({"success": True, "data": result})
+    # 等距采样：8 个点 × 每点 500 人，覆盖头部/中部/尾部
+    n_points = 8
+    per_point = 500
+    names_seen = {}
+    for i in range(n_points):
+        si = int(total * i / n_points)
+        persons, _ = service.emby.get_persons(si, per_point)
+        for p in persons or []:
+            result["scanned"] += 1
+            name = p.get("Name") or ""
+            if not name:
+                continue
+            if service._has_cn(name):
+                result["skipped_cn"] += 1
+            else:
+                names_seen.setdefault(name, 0)
+                names_seen[name] += 1
+    result["need_translate"] = len(names_seen)
+    # 按样本中非中文名占比估算全库待翻译名字数
+    ratio = result["need_translate"] / max(result["scanned"], 1)
+    result["estimated_total"] = int(total * ratio)
+    result["sample_points"] = n_points
+    result["samples"] = list(names_seen.keys())[:10]
     return jsonify({"success": True, "data": result})
 
 
