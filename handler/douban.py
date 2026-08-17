@@ -385,8 +385,9 @@ class DoubanApi:
                     if top_score >= 0.6:  # 相似度足够才信任排名
                         logger.info(f"  ➜ 找到多个年份精确匹配的候选，按相似度选最优: {ranked[0]} (相似度 {top_score:.2f})")
                         return ranked[0]
-                    logger.info(f"  ➜ 多个候选相似度均低({top_score:.2f})，取第一个。Candidates: {year_exact_candidates}")
-                    return year_exact_candidates[0]
+                    # 相似度太低 → 放弃豆瓣匹配（避免错配如 Dark→黑暗正义联盟）
+                    logger.warning(f"  ➜ 多个候选相似度均低({top_score:.2f})，放弃豆瓣匹配避免错配。Candidates: {year_exact_candidates[:3]}")
+                    return self._make_error_dict("low_similarity", f"候选相似度过低({top_score:.2f})，放弃豆瓣匹配")
             
             logger.info(f"  ➜ 找到多个候选匹配项 for '{name}', 返回第一个。 Candidates: {candidates}")
             return candidates[0]
