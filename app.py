@@ -80,7 +80,7 @@ table td{max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowr
 </head>
 <body>
 <h1>🎬 ETK 精简版 · Emby 翻译 <span class="tip">v5.8</span></h1>
-<div class="tip">服务地址: http://10.10.10.131:8080 ｜ webhook: http://10.10.10.131:8080/webhook/emby（Emby 后台 → Webhook 插件 → 勾选"媒体库新增内容"即可实时翻译新片）</div>
+<div class="tip">服务地址: <span id="server_addr"></span> ｜ webhook: <span id="webhook_addr"></span>/webhook/emby（Emby 后台 → Webhook 插件 → 勾选"媒体库新增内容"即可实时翻译新片）</div>
 
 <div class="tabs">
   <div class="tab active" onclick="showTab('tab-config')">⚙️ 配置</div>
@@ -642,6 +642,15 @@ async function loadLogs() {
 }
 setInterval(refreshTasks, 5000);
 setInterval(loadLogs, 5000);  // 日志每 5 秒自动刷新
+
+// 动态显示服务地址（不硬编码 IP，部署后自动正确）
+(function() {
+  const host = window.location.host;
+  const base = 'http://' + host;
+  document.getElementById('server_addr').textContent = base;
+  document.getElementById('webhook_addr').textContent = base;
+})();
+
 loadConfig(); refreshTasks(); loadLogs(); loadSchedule(); loadFailed(); loadPrompts();
 </script>
 </body>
