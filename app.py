@@ -79,7 +79,7 @@ table td{max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowr
 </style>
 </head>
 <body>
-<h1>🎬 ETK 精简版 · Emby 翻译 <span class="tip">v5.8</span></h1>
+<h1>🎬 ETK 精简版 · Emby 翻译 <span class="tip">v5.9</span></h1>
 <div class="tip">服务地址: <span id="server_addr"></span> ｜ webhook: <span id="webhook_addr"></span>/webhook/emby（Emby 后台 → Webhook 插件 → 勾选"媒体库新增内容"即可实时翻译新片）</div>
 
 <div class="tabs">
@@ -143,6 +143,11 @@ table td{max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowr
     <button class="btn" onclick="saveConfig()">💾 保存配置</button>
     <button class="btn gray" onclick="testAI()">🧪 测试连接</button>
     <span id="cfg_msg" class="tip"></span>
+  </div>
+
+  <div class="card">
+    <h2>📊 缓存统计 <button class="btn gray sm" onclick="loadStats()" style="float:right">🔄 刷新</button></h2>
+    <div id="cache_stats" class="tip">加载中...</div>
   </div>
 </div>
 
@@ -438,6 +443,26 @@ async function loadSchedule() {
     document.getElementById('sched_persons_en').checked = !!d.persons_enabled;
   }
 }
+async function loadStats() {
+  const r = await api('/api/stats');
+  const el = document.getElementById('cache_stats');
+  if (!r.success || !r.data) { el.textContent = '加载失败'; return; }
+  const d = r.data;
+  const dbSize = r.db_size ? (r.db_size / 1024).toFixed(1) + ' KB' : '未知';
+  const names = {
+    translation_cache: '翻译缓存（人员/标题/简介）',
+    media_metadata: '媒体元数据',
+    processed_log: '已处理记录（防重复翻译）',
+    failed_log: '失败记录',
+    app_settings: '配置项',
+  };
+  let html = `<p>数据库大小: <b>${dbSize}</b></p><table><tr><th>类型</th><th>数量</th></tr>`;
+  for (const k of Object.keys(names)) {
+    html += `<tr><td>${names[k]}</td><td><b>${d[k] ?? 0}</b> 条</td></tr>`;
+  }
+  html += '</table>';
+  el.innerHTML = html;
+}
 async function loadFailed() {
   const r = await api('/api/records');
   const el = document.getElementById('failed_list');
@@ -651,7 +676,7 @@ setInterval(loadLogs, 5000);  // 日志每 5 秒自动刷新
   document.getElementById('webhook_addr').textContent = base;
 })();
 
-loadConfig(); refreshTasks(); loadLogs(); loadSchedule(); loadFailed(); loadPrompts();
+loadConfig(); loadStats(); refreshTasks(); loadLogs(); loadSchedule(); loadFailed(); loadPrompts();
 </script>
 </body>
 </html>
@@ -1015,6 +1040,33 @@ def emby_test():
         return jsonify({"success": True, "message": info, "sample": items[0].get("Name") if items else None})
     except Exception as e:
         return jsonify({"success": False, "message": f"Emby 测试失败: {str(e)[:100]}"})
+
+
+# ---------- 缓存统计 ----------
+@app.route("/api/stats", methods=["GET"])
+def cache_stats():
+    """缓存统计：各表行数 + 数据库文件大小"""
+    import sqlite3
+    db_path = os.environ.get("ETK_DB_PATH", "/config/etk.db")
+    stats = {}
+    try:
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        for t in ("translation_cache", "media_metadata", "processed_log",
+                  "failed_log", "app_settings"):
+            try:
+                stats[t] = cur.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+            except Exception:
+                stats[t] = 0
+        conn.close()
+    except Exception as e:
+        stats["_error"] = str(e)
+    db_size = 0
+    try:
+        db_size = os.path.getsize(db_path)
+    except Exception:
+        pass
+    return jsonify({"success": True, "data": stats, "db_size": db_size})
 
 
 # ---------- AI 提示词管理（用户可自定义，原版 /api/ai/prompts） ----------

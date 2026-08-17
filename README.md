@@ -1,6 +1,6 @@
 # ETK 精简版 — Emby 翻译服务
 
-> **当前版本：v5.8**（2026-08-17）
+> **当前版本：v5.9**（2026-08-17）
 > 部署地址：**http://<你的IP>:8080**
 
 从 [hbq0405/emby-toolkit](https://github.com/hbq0405/emby-toolkit)（AGPL v3.0）裁剪：
