@@ -71,8 +71,9 @@ class TaskQueue:
             with self._lock:
                 task["status"] = "running"
                 task["started_at"] = time.time()
+                task["last_progress_at"] = time.time()
+                task["timed_out"] = False
             try:
-                # 带超时的执行（用 daemon 线程 + join 实现超时）
                 result_holder = {}
 
                 def _target():
@@ -85,10 +86,37 @@ class TaskQueue:
 
                 t = threading.Thread(target=_target, daemon=True)
                 t.start()
-                t.join(timeout=task["timeout"])
-                if t.is_alive():
-                    raise TimeoutError(f"任务超时（{task['timeout']}s）")
 
+                # ★ 软超时轮询：超时不杀任务（子线程无法强杀），改为标记 timed_out
+                # 继续等真实结果；只有【超时 + 长时间无进度】才判定卡死 → failed + 释放去重
+                while t.is_alive():
+                    with self._lock:
+                        elapsed = time.time() - task["started_at"]
+                        last_prog = task.get("last_progress_at") or task["started_at"]
+                    if elapsed > task["timeout"]:
+                        idle = time.time() - last_prog
+                        if idle > 120:  # 超时后 120s 无任何进度更新 = 真卡死
+                            task["error"] = (f"任务卡死（已运行 {int(elapsed)}s，"
+                                             f"最后进度更新 {int(idle)}s 前），已释放。可重新提交。")
+                            task["status"] = "failed"
+                            break
+                        if not task.get("timed_out"):
+                            task["timed_out"] = True
+                            logger.info(f"任务 [{task['name']}] 超过 {task['timeout']}s 仍在执行（软超时，继续等待）")
+                    t.join(timeout=0.5)  # 等子线程 0.5s（结束即返回，延迟最小）
+
+                if t.is_alive():
+                    # 卡死分支：无法强杀 daemon 线程，释放去重键让用户重试
+                    task["finished_at"] = time.time()
+                    with self._lock:
+                        if task["dedup_key"]:
+                            self._pending_keys.discard(task["dedup_key"])
+                    self._current = None
+                    self._idle.set()
+                    self._queue.task_done()
+                    continue
+
+                t.join()
                 if result_holder.get("ok"):
                     task["result"] = result_holder.get("result")
                     # 若结果里有 cancelled 标记，显示为已停止
@@ -108,9 +136,6 @@ class TaskQueue:
                         self._current = None
                         continue
                     task["status"] = "failed"
-            except TimeoutError as e:
-                task["error"] = str(e)
-                task["status"] = "failed"
             except Exception as e:
                 task["error"] = f"{e}\n{traceback.format_exc()}"
                 task["status"] = "failed"
@@ -175,6 +200,7 @@ class TaskQueue:
                 self._current["progress_text"] = text
                 self._current["done"] = progress
                 self._current["total"] = 100
+                self._current["last_progress_at"] = time.time()  # 卡死检测依据
 
     def clear_history(self) -> int:
         """清空已完成/已停止的历史任务，保留当前运行中的。返回清除了多少个。"""

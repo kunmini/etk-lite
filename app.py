@@ -79,7 +79,7 @@ table td{max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowr
 </style>
 </head>
 <body>
-<h1>🎬 ETK 精简版 · Emby 翻译 <span class="tip">v5.14</span></h1>
+<h1>🎬 ETK 精简版 · Emby 翻译 <span class="tip">v5.15</span></h1>
 <div class="tip">服务地址: <span id="server_addr"></span> ｜ webhook: <span id="webhook_addr"></span>/webhook/emby（Emby 后台 → Webhook 插件 → 勾选"媒体库新增内容"即可实时翻译新片）</div>
 
 <div class="tabs">
@@ -268,7 +268,9 @@ table td{max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowr
 
 <div id="tab-tasks" class="tabpage">
   <div class="card">
-    <h2>📊 任务状态</h2>
+    <h2>📊 任务状态（每 5 秒自动刷新）
+      <button class="btn gray sm" onclick="clearTaskHistory()" style="float:right">🗑 清空历史</button>
+    </h2>
     <div id="task_status">加载中...</div>
   </div>
 </div>
@@ -613,28 +615,35 @@ async function refreshTasks() {
   const d = await api('/api/tasks');
   if (!d.data) return;
   const el = document.getElementById('task_status');
+  const ST = {running:'运行中', queued:'排队中', success:'已完成', failed:'失败', cancelled:'已停止', timed_out:'已超时(仍在执行)'};
+  const fmtDur = s => { if (!s) return ''; s = Math.max(0, Math.floor(s)); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), ss = s%60; return (h? h+'时':'') + (m || h? m+'分':'') + ss+'秒'; };
   let html = '';
   if (d.data.current) {
     const c = d.data.current;
     const pct = c.progress || 0;
-    const statusCls = c.status === 'running' ? 'running' : (c.status === 'failed' ? 'failed' : '');
-    html += `<p>▶ 当前任务: <b>${c.name}</b> <span class="status ${statusCls}">${c.status === 'cancelled' ? '已停止' : c.status}</span></p>`;
+    const timedOut = !!c.timed_out;
+    const stKey = timedOut ? 'timed_out' : (c.status === 'running' ? 'running' : c.status);
+    const statusCls = stKey === 'running' ? 'running' : (stKey === 'failed' ? 'failed' : (stKey === 'timed_out' ? 'queued' : (stKey === 'success' ? 'success' : '')));
+    const elapsed = (Date.now()/1000) - (c.started_at || Date.now()/1000);
+    html += `<p>▶ 当前任务: <b>${c.name}</b> <span class="status ${statusCls}">${ST[stKey] || stKey}</span>${timedOut ? ' <span class="tip" style="color:#f59e0b">⚠️ 已超过时限，仍在执行（服务商慢或量大，可点停止）</span>' : ''}</p>`;
     html += `<div style="background:#1a1d24;border-radius:6px;height:18px;margin:8px 0;overflow:hidden">
-      <div style="background:#3b82f6;height:100%;width:${pct}%;transition:width .5s;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff">${pct}%</div></div>`;
+      <div style="background:${timedOut ? '#f59e0b' : '#3b82f6'};height:100%;width:${pct}%;transition:width .5s;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff">${pct}%</div></div>`;
     if (c.progress_text) html += `<p class="tip">${c.progress_text}</p>`;
-    if (c.total && c.done) html += `<p class="tip">进度: ${c.done}/${c.total}</p>`;
+    html += `<p class="tip">运行时长: ${fmtDur(elapsed)} ${c.total && c.done ? `｜ 进度: ${c.done}/${c.total}` : ''}</p>`;
     if (c.status === 'running' || c.status === 'queued') {
       html += `<button class="btn red sm" onclick="cancelTask('${c.id}')">⏹ 停止任务</button>`;
     }
-    if (c.error) html += `<p class="tip" style="color:#f87171">错误: ${String(c.error).slice(0,100)}</p>`;
+    if (c.error) html += `<p class="tip" style="color:#f87171">错误: ${String(c.error).slice(0,160)}</p>`;
   } else {
     html += '<p>空闲中</p>';
   }
   const tasks = (d.data.tasks || []).slice().reverse();
   if (tasks.length) {
-    html += '<table style="margin-top:10px"><tr><th>状态</th><th>任务</th><th>时间</th><th>结果</th></tr>';
+    html += '<table style="margin-top:10px"><tr><th>状态</th><th>任务</th><th>开始</th><th>耗时</th><th>结果</th></tr>';
     tasks.slice(0, 10).forEach(t => {
-      const cls = t.status === 'success' ? 'success' : (t.status === 'failed' ? 'failed' : (t.status === 'running' ? 'running' : 'queued'));
+      const timedOut = !!t.timed_out;
+      const stKey = timedOut && t.status === 'running' ? 'timed_out' : t.status;
+      const cls = stKey === 'success' ? 'success' : (stKey === 'failed' ? 'failed' : (stKey === 'running' ? 'running' : (stKey === 'queued' ? 'queued' : '')));
       let res = '';
       if (t.status === 'success' && t.result) {
         const r = typeof t.result === 'string' ? t.result : JSON.stringify(t.result);
@@ -642,11 +651,12 @@ async function refreshTasks() {
       } else if (t.status === 'failed') {
         res = String(t.error || '失败').slice(0, 60);
       } else if (t.status === 'running') {
-        res = (t.progress || 0) + '% ' + (t.progress_text || '');
+        res = (t.progress || 0) + '% ' + (t.progress_text || '') + (t.timed_out ? ' ⚠️超时' : '');
       } else if (t.status === 'cancelled') {
         res = '已停止';
       }
-      html += `<tr><td><span class="status ${cls}">${t.status === 'cancelled' ? '已停止' : t.status}</span></td><td>${t.name}</td><td>${new Date(t.created_at*1000).toLocaleTimeString()}</td><td>${res}</td></tr>`;
+      const dur = t.finished_at && t.started_at ? fmtDur(t.finished_at - t.started_at) : '';
+      html += `<tr><td><span class="status ${cls}">${ST[stKey] || stKey}</span></td><td>${t.name}</td><td>${t.started_at ? new Date(t.started_at*1000).toLocaleTimeString() : '-'}</td><td>${dur || '-'}</td><td>${res}</td></tr>`;
     });
     html += '</table>';
   }
@@ -655,6 +665,12 @@ async function refreshTasks() {
 async function cancelTask(taskId) {
   if (!confirm('停止当前任务？已处理的保留，未处理的跳过。')) return;
   const r = await api('/api/tasks/cancel', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({task_id: taskId})});
+  alert(r.message || '完成');
+  refreshTasks();
+}
+async function clearTaskHistory() {
+  if (!confirm('清空任务历史？当前运行中的任务不受影响。')) return;
+  const r = await api('/api/tasks/clear', {method:'POST'});
   alert(r.message || '完成');
   refreshTasks();
 }
@@ -804,7 +820,7 @@ def batch_translate():
         service.batch_translate,
         item_type, limit, refresh, None, True, force,
         dedup_key=f"batch:{item_type}",
-        timeout=3600, retries=0,
+        timeout=28800, retries=0,  # 8小时软超时（超时只提醒不杀任务，卡死才判失败）
     )
     if task_id:
         return jsonify({"success": True, "message": f"批量翻译 {item_type} 已提交", "task_id": task_id})
@@ -843,7 +859,7 @@ def translate_persons():
         service.translate_all_persons,
         limit, None,
         dedup_key="persons:all",
-        timeout=7200, retries=0,
+        timeout=86400, retries=0,  # 24小时软超时（39万人物全库翻译耗时以小时计）
     )
     if task_id:
         return jsonify({"success": True, "message": "全库人物名翻译已提交（后台执行）", "task_id": task_id})
@@ -919,6 +935,13 @@ def tasks_cancel():
     task_id = data.get("task_id", "")
     ok = task_queue.cancel(task_id)
     return jsonify({"success": ok, "message": "已请求停止任务" if ok else "无运行中任务"})
+
+
+@app.route("/api/tasks/clear", methods=["POST"])
+def tasks_clear():
+    """清空已完成/已停止的历史任务（保留当前运行中的）"""
+    n = task_queue.clear_history()
+    return jsonify({"success": True, "message": f"已清空 {n} 条历史任务"})
 
 
 # ---------- 日志 ----------
