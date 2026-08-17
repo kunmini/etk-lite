@@ -55,14 +55,6 @@ def _init_schema(conn):
         engine_used TEXT,
         last_updated_at TEXT
     )""")
-    conn.execute("""CREATE TABLE IF NOT EXISTS media_metadata (
-        tmdb_id TEXT,
-        item_type TEXT,
-        title TEXT,
-        overview TEXT,
-        tagline TEXT,
-        PRIMARY KEY (tmdb_id, item_type)
-    )""")
     conn.execute("""CREATE TABLE IF NOT EXISTS app_settings (
         setting_key TEXT PRIMARY KEY,
         value_json TEXT,

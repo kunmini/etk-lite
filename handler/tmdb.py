@@ -729,63 +729,6 @@ def find_person_by_external_id(external_id: str, api_key: str, source: str = "im
         return None
 
 # --- 获取合集的详细信息 ---
-def get_collection_details(
-    collection_id: int,
-    api_key: str,
-    skip_fallback: bool = False,
-    apply_image_preference: bool = True,
-    *,
-    raise_not_found: bool = False,
-) -> Optional[Dict[str, Any]]:
-    """
-    【V3 - 极致性能版】获取指定 TMDb 合集的详细信息。
-    增加 skip_fallback 参数，允许调用方在不需要简介时跳过英文兜底请求。
-    """
-    if not collection_id or not api_key:
-        return None
-        
-    endpoint = f"/collection/{collection_id}"
-    params = {"language": DEFAULT_LANGUAGE}
-    
-    logger.debug(f"  ➜ TMDb API: 获取合集详情 (ID: {collection_id})...")
-    data_zh = _tmdb_request(
-        endpoint,
-        api_key,
-        params,
-        raise_not_found=raise_not_found,
-    )
-    
-    if not data_zh:
-        return None
-
-    # ★ 核心优化：如果调用方明确表示不需要兜底，直接返回
-    if skip_fallback:
-        return _apply_collection_image_preference(data_zh, api_key) if apply_image_preference else data_zh
-
-    # 检查简介是否缺失，如果缺失则请求英文兜底
-    overview = data_zh.get("overview", "")
-    if not overview or len(overview) < 2:
-        if DEFAULT_LANGUAGE.startswith("zh"):
-            logger.debug(f"    ➜ 合集 (ID: {collection_id}) 缺失中文简介，正在请求英文版补全...")
-            try:
-                params_en = {"language": "en-US"}
-                data_en = _tmdb_request(endpoint, api_key, params_en)
-                
-                if data_en:
-                    en_overview = data_en.get("overview")
-                    if en_overview:
-                        data_zh["overview"] = en_overview
-                        logger.debug(f"    ➜ 成功补全合集英文简介源文本。")
-                    
-                    if not data_zh.get("name") and data_en.get("name"):
-                        data_zh["name"] = data_en.get("name")
-                        
-            except Exception as e:
-                logger.warning(f"    ➜ 补全合集英文简介失败: {e}")
-
-    return _apply_collection_image_preference(data_zh, api_key) if apply_image_preference else data_zh
-
-
 def _apply_collection_image_preference(details: Dict[str, Any], api_key: str) -> Dict[str, Any]:
     from database.metadata_provider_db import select_collection_image_paths
 

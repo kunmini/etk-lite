@@ -7,24 +7,6 @@ from . import connection
 logger = logging.getLogger(__name__)
 
 
-def get_local_translation_info(tmdb_id: str, item_type: str) -> Optional[Dict[str, str]]:
-    """获取本地已翻译的元数据（标题/简介/标语），防止被英文覆盖"""
-    if not tmdb_id or not item_type:
-        return None
-    try:
-        with connection.get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT title, overview, tagline FROM media_metadata WHERE tmdb_id = ? AND item_type = ?",
-                (str(tmdb_id), item_type))
-            row = cursor.fetchone()
-            if row:
-                return {"title": row["title"], "overview": row["overview"], "tagline": row["tagline"]}
-    except Exception as e:
-        logger.debug(f"本地翻译缓存读取失败: {e}")
-    return None
-
-
 # ---------- processed_log / failed_log（防重复翻译 + 失败记录） ----------
 
 def is_processed(item_id: str) -> bool:

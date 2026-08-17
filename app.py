@@ -79,7 +79,7 @@ table td{max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowr
 </style>
 </head>
 <body>
-<h1>🎬 ETK 精简版 · Emby 翻译 <span class="tip">v5.10</span></h1>
+<h1>🎬 ETK 精简版 · Emby 翻译 <span class="tip">v5.11</span></h1>
 <div class="tip">服务地址: <span id="server_addr"></span> ｜ webhook: <span id="webhook_addr"></span>/webhook/emby（Emby 后台 → Webhook 插件 → 勾选"媒体库新增内容"即可实时翻译新片）</div>
 
 <div class="tabs">
