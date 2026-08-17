@@ -1052,8 +1052,7 @@ def cache_stats():
     try:
         conn = sqlite3.connect(db_path)
         cur = conn.cursor()
-        for t in ("translation_cache", "media_metadata", "processed_log",
-                  "failed_log", "app_settings"):
+        for t in ("translation_cache", "processed_log", "failed_log", "app_settings"):
             try:
                 stats[t] = cur.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
             except Exception:
