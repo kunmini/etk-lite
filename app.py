@@ -79,7 +79,7 @@ table td{max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowr
 </style>
 </head>
 <body>
-<h1>🎬 ETK 精简版 · Emby 翻译 <span class="tip">v5.12</span></h1>
+<h1>🎬 ETK 精简版 · Emby 翻译 <span class="tip">v5.13</span></h1>
 <div class="tip">服务地址: <span id="server_addr"></span> ｜ webhook: <span id="webhook_addr"></span>/webhook/emby（Emby 后台 → Webhook 插件 → 勾选"媒体库新增内容"即可实时翻译新片）</div>
 
 <div class="tabs">
@@ -700,8 +700,8 @@ def get_config():
     return jsonify({"success": True, "data": {
         "emby_url": cfg.get("emby_url", ""),
         "emby_api_key": cfg.get("emby_api_key", ""),
-        "emby_user": os.environ.get("EMBY_USER", "root"),
-        "emby_pass": os.environ.get("EMBY_PASS", ""),
+        "emby_user": cfg.get("emby_user") or os.environ.get("EMBY_USER", "root"),
+        "emby_pass": cfg.get("emby_pass") or os.environ.get("EMBY_PASS", ""),
         "ai_provider": cfg.get("ai_provider", "openai"),
         "ai_api_key": cfg.get("ai_api_key", ""),
         "ai_base_url": cfg.get("ai_base_url", ""),
@@ -766,20 +766,22 @@ def item_preview():
             "overview_original": (tdata.get("overview") or "")[:200],
             "actors_original": [a.get("name", "") for a in (tdata.get("cast") or [])[:5]],
         }
-        # 用试译 API 逻辑翻译标题（看效果）
+        # 用专用提示词翻译标题 + 简介（之前用 fast 人名模式翻简介，长文本必空）
         ai = service.ai
         title_result = {}
         try:
-            title_result = ai.batch_translate([preview["title_original"]], mode="fast") if preview["title_original"] else {}
+            if preview["title_original"]:
+                title_result = ai.batch_translate([preview["title_original"]], mode="fast")
         except Exception:
             pass
         preview["title_translated"] = title_result.get(preview["title_original"], "")
-        # 简介翻译（quality 模式，Qwen 不稳时跳过）
+        # 简介翻译：用专用 overview 提示词（quality 模式带上下文，比 fast 短词模式靠谱）
         preview["overview_translated"] = ""
         if preview["overview_original"] and len(preview["overview_original"]) > 10:
             try:
-                ov = ai.batch_translate([preview["overview_original"]], mode="fast")
-                preview["overview_translated"] = ov.get(preview["overview_original"], "")
+                ov = ai.translate_overview(preview["overview_original"],
+                                           title=preview["title_original"] or preview["name"])
+                preview["overview_translated"] = ov or ""
             except Exception:
                 pass
         return jsonify({"success": True, "data": preview})
@@ -877,7 +879,7 @@ def scan_persons():
             name = p.get("Name") or ""
             if not name:
                 continue
-            if service._has_cn(name):
+            if service._has_cjk(name):
                 result["skipped_cn"] += 1
             else:
                 names_seen.setdefault(name, 0)
@@ -978,7 +980,7 @@ def ai_test():
     service = get_service()
     try:
         result = service.ai.batch_translate(["Test"], mode="fast")
-        ok = bool(result) and "Test" in result and result["Test"]
+        ok = bool(result) and "Test" in result and bool(result["Test"])
         return jsonify({"success": ok, "message": "连接正常" if ok else "翻译返回异常",
                         "result": result.get("Test") if result else None})
     except Exception as e:

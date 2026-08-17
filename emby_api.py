@@ -39,11 +39,11 @@ class EmbyAPI:
                     return True
             except Exception as e:
                 logger.warning(f"API Key 直连失败（回退账密登录）: {e}")
-        # 方式2: 账密登录
+        # 方式2: 账密登录（Emby 只认 form 格式，json 会报 401/参数错误）
         try:
             r = requests.post(f"{self.url}/Users/AuthenticateByName",
                               headers=HEADERS,
-                              json={"Username": self.username, "Pw": self.password},
+                              data={"Username": self.username, "Pw": self.password},
                               timeout=15)
             r.raise_for_status()
             data = r.json()

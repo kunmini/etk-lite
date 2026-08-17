@@ -176,6 +176,23 @@ class TaskQueue:
                 self._current["done"] = progress
                 self._current["total"] = 100
 
+    def clear_history(self) -> int:
+        """清空已完成/已停止的历史任务，保留当前运行中的。返回清除了多少个。"""
+        with self._lock:
+            current_id = self._current["id"] if self._current else None
+            removed = 0
+            to_remove = []
+            for tid, t in self._tasks.items():
+                if tid == current_id:
+                    continue  # 当前运行中的不动
+                status = t.get("status")
+                if status in ("success", "failed", "cancelled"):
+                    to_remove.append(tid)
+            for tid in to_remove:
+                self._tasks.pop(tid, None)
+                removed += 1
+            return removed
+
 
 # 全局任务队列
 task_queue = TaskQueue()

@@ -36,9 +36,10 @@ class TranslateService:
     def _ensure_clients(self):
         cfg = config_manager.APP_CONFIG
         if self.emby is None:
-            self.emby = EmbyAPI(cfg["emby_url"],
-                                os.environ.get("EMBY_USER", "root"),
-                                os.environ.get("EMBY_PASS", "123"),
+            # 优先用 config.json 里的值（131 迁移过来的一致配置），env 只是兜底
+            self.emby = EmbyAPI(cfg.get("emby_url") or os.environ.get("EMBY_URL", "http://127.0.0.1:8096"),
+                                cfg.get("emby_user") or os.environ.get("EMBY_USER", "root"),
+                                cfg.get("emby_pass") or os.environ.get("EMBY_PASS", "123"),
                                 api_key=cfg.get("emby_api_key", ""))
             self.emby.login()
         if self.ai is None:
@@ -100,6 +101,18 @@ class TranslateService:
 
     def _has_cn(self, text: str) -> bool:
         return bool(text) and bool(re.search(r'[\u4e00-\u9fff]', text or ""))
+
+    def _has_cjk(self, text: str) -> bool:
+        """检测是否含中日韩文字（中文汉字 + 日文假名 + 韩文谚文）。
+        人物翻译用：已是东亚文字的名字（如韩文 오영미、日文假名）不再送 AI 翻译，
+        避免 fast 模式把韩文/日文名乱译、浪费 token（只翻译拉丁字母等外文名）。"""
+        if not text:
+            return False
+        return bool(re.search(
+            r'[\u4e00-\u9fff\u3400-\u4dbf'          # 中文汉字（含扩展A）
+            r'\u3040-\u30ff\u31f0-\u31ff'           # 日文平假名/片假名
+            r'\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]',  # 韩文谚文
+            text))
 
     def _fetch_douban_cast(self, item: dict) -> Optional[list]:
         """查豆瓣演员表（中文名+角色名），返回 TMDb 兼容 cast 列表或 None。
@@ -194,13 +207,16 @@ class TranslateService:
             return {"changed": False, "error": f"条目 {item_id} 不存在"}
 
         data = self._build_tmdb_data(item)
-        before_title = data["title"]
+        # 标题字段 key 因类型而异：Movie 用 'title'，Series/Episode 用 'name'（与原版引擎一致）
+        item_type = item.get("Type")
+        title_key = "title" if item_type == "Movie" else "name"
+        before_title = data.get(title_key)
         before_ov = data["overview"]
 
         # 豆瓣预取：先查豆瓣中文演员表（中文名+角色名），合并进翻译数据
         # 优化：仅当需要翻译演员/角色时才查（标题简介已中文+演员开关关 = 跳过，省时间）
         cfg_now = config_manager.APP_CONFIG
-        need_actor = cfg_now.get("ai_translate_actor_role", False) or not self._has_cn(before_title)
+        need_actor = cfg_now.get("ai_translate_actor_role", False) or not self._has_cn(before_title or "")
         if need_actor:
             douban_cast = self._fetch_douban_cast(item)
             if douban_cast:
@@ -222,9 +238,11 @@ class TranslateService:
             return {"changed": False, "error": str(e)}
 
         updates = {}
-        if data["title"] and data["title"] != before_title:
-            updates["Name"] = data["title"]
-        if data["overview"] and data["overview"] != before_ov:
+        # ★ 用 title_key 判断（Movie='title'，Series/Episode='name'），否则剧集标题翻译后被丢弃不写回
+        new_title = data.get(title_key)
+        if new_title and new_title != before_title:
+            updates["Name"] = new_title
+        if data.get("overview") and data["overview"] != before_ov:
             updates["Overview"] = data["overview"]
 
         if not updates:
@@ -374,7 +392,7 @@ class TranslateService:
                 name = p.get("Name") or ""
                 if not name:
                     continue
-                if self._has_cn(name):
+                if self._has_cjk(name):
                     result["skipped_cn"] += 1
                     continue
                 name_to_ids.setdefault(name, []).append(p.get("Id"))
@@ -416,22 +434,47 @@ class TranslateService:
                 continue
             if not isinstance(trans_map, dict):
                 trans_map = {}
-            # 3. 写回（白名单：只更新翻译后含中文的）
+            # 3. 写回（白名单：只更新翻译后含中文的；10 线程并发，对齐原版）
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            update_tasks = []
             for orig, translated in trans_map.items():
                 if not translated or not self._has_cn(str(translated)):
                     continue
                 if str(translated).strip() == orig:
                     continue
                 for pid in name_to_ids.get(orig, []):
-                    if self._wait_idle_before_write:
-                        self.emby.wait_for_server_idle(max_wait=30, check_interval=5)
-                    ok = self.emby.update_person_details(pid, str(translated).strip())
-                    if ok:
-                        result["updated"] += 1
-                    else:
-                        result["failed"] += 1
+                    update_tasks.append((pid, str(translated).strip()))
                 if len(result["samples"]) < 5:
                     result["samples"].append(f"{orig} → {translated}")
+
+            if update_tasks:
+                # 写回前整个任务只等一次 Emby 空闲（原版无此等待；不再每演员阻塞）
+                if self._wait_idle_before_write:
+                    self.emby.wait_for_server_idle(max_wait=30, check_interval=5)
+                    self._wait_idle_before_write = False
+
+                executor = ThreadPoolExecutor(max_workers=10)
+                try:
+                    futures = {executor.submit(self.emby.update_person_details, pid, name): (pid, name)
+                               for pid, name in update_tasks}
+                    for fut in as_completed(futures):
+                        if task_queue.is_cancelled():
+                            logger.info("⏹ 人物写回被用户停止")
+                            result["cancelled"] = True
+                            if "cancelled_at" not in result:
+                                result["cancelled_at"] = result["updated"]
+                            for f in futures:  # 取消未启动的写回
+                                f.cancel()
+                            break
+                        try:
+                            if fut.result():
+                                result["updated"] += 1
+                            else:
+                                result["failed"] += 1
+                        except Exception:
+                            result["failed"] += 1
+                finally:
+                    executor.shutdown(wait=False, cancel_futures=True)
             pct2 = min(40 + int((i + bsize) / len(all_names) * 60), 99)
             txt2 = f"翻译写回 {min(i+bsize, len(all_names))}/{len(all_names)}"
             if progress_cb:
