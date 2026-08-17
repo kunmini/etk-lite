@@ -1,0 +1,37 @@
+# ETK 精简版 - Emby 翻译服务（v4.1）
+# 部署: sudo docker compose up -d --build
+# 访问: http://<本机IP>:8080
+# 数据: ./config/（config.json 配置 / etk.db 缓存 / etk.log 日志）
+#
+# 注意：以下环境变量是【首次启动的初始值】。保存后 UI（http://<IP>:8080）
+# 里的配置会写入 ./config/config.json 并优先生效。UI 可改全部项，无需改 compose。
+services:
+  etk-lite:
+    build: .
+    image: etk-lite:1.0
+    container_name: etk-lite
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/config
+    environment:
+      - TZ=Asia/Shanghai  # 时区：北京时间（日志/定时任务用）
+      - ETK_PORT=8080
+      - ETK_DB_PATH=/config/etk.db
+      - ETK_CONFIG_FILE=/config/config.json
+      - ETK_LOG_FILE=/config/etk.log
+      # ---- Emby 连接（初始值，UI 可改）----
+      - EMBY_URL=http://改成你的Emby地址:8096
+      - EMBY_USER=root
+      - EMBY_PASS=改成你的Emby密码
+      # EMBY_API_KEY=可选，Emby 后台→高级→API Key。填了优先用 Key
+      # TMDB_API_KEY=可选，拉英文元数据辅助翻译。留空则用 Emby 已有数据
+      # ---- AI 翻译（初始值，UI 可改）----
+      # 硅基流动: AI_BASE_URL=https://api.siliconflow.cn/v1, AI_MODEL=Qwen/Qwen2.5-7B-Instruct
+      # Moonshot: AI_BASE_URL=https://api.moonshot.cn/v1, AI_MODEL=moonshot-v1-8k
+      - AI_API_KEY=sk-填入你的key
+      - AI_BASE_URL=https://api.deepseek.com/v1
+      - AI_MODEL=deepseek-chat
+      - AI_MODE=quality
+      - AI_PROVIDER=openai

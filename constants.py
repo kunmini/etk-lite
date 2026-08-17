@@ -1,0 +1,255 @@
+# constants.py
+
+# ==============================================================================
+# ✨ 应用基础信息 (Application Basics)
+# ==============================================================================
+APP_VERSION = "10.8.65"  # 更新版本号
+GITHUB_REPO_OWNER = "hbq0405"  # 您的 GitHub 用户名
+GITHUB_REPO_NAME = "emby-toolkit" # 您的 GitHub 仓库名
+DEBUG_MODE = True     # 开发模式开关，部署时应设为 False
+WEB_APP_PORT = 5257    # Web UI 监听的端口
+CONFIG_FILE_NAME = "config.ini" # 主配置文件名
+TIMEZONE = "Asia/Shanghai" # 应用使用的时区，用于计划任务等
+
+# ==============================================================================
+# ✨ 数据库配置 (Database) - PostgreSQL
+# ==============================================================================
+CONFIG_SECTION_DATABASE = "Database"
+CONFIG_OPTION_DB_HOST = "db_host"
+CONFIG_OPTION_DB_PORT = "db_port"
+CONFIG_OPTION_DB_USER = "db_user"
+CONFIG_OPTION_DB_PASSWORD = "db_password"
+CONFIG_OPTION_DB_NAME = "db_name"
+ENV_VAR_DB_HOST = "DB_HOST"
+ENV_VAR_DB_PORT = "DB_PORT"
+ENV_VAR_DB_USER = "DB_USER"
+ENV_VAR_DB_PASSWORD = "DB_PASSWORD"
+ENV_VAR_DB_NAME = "DB_NAME"
+
+# ==============================================================================
+# ✨ 实时监控配置 (Real-time Monitor) - 
+# ==============================================================================
+CONFIG_SECTION_MONITOR = "Monitor"
+CONFIG_OPTION_MONITOR_ENABLED = "monitor_enabled"
+CONFIG_OPTION_MONITOR_PATHS = "monitor_paths"           # 监控目录列表
+CONFIG_OPTION_MONITOR_EXTENSIONS = "monitor_extensions" # 监控扩展名列表
+DEFAULT_MONITOR_EXTENSIONS = [".mp4", ".mkv", ".avi", ".mov", ".iso", ".ts", ".strm"] # 默认监控的文件扩展名
+CONFIG_OPTION_MONITOR_SCAN_MAX_TASKS = "monitor_scan_max_tasks" # 单次扫描最多主动处理的目录数
+DEFAULT_MONITOR_SCAN_MAX_TASKS = 10
+CONFIG_OPTION_MONITOR_SCAN_BATCH_SIZE = "monitor_scan_batch_size" # 扫描任务批量处理大小
+DEFAULT_MONITOR_SCAN_BATCH_SIZE = 2
+CONFIG_OPTION_MONITOR_EXCLUDE_DIRS = "monitor_exclude_dirs" 
+DEFAULT_MONITOR_EXCLUDE_DIRS = [] # 默认排除路径列表
+CONFIG_OPTION_MONITOR_EXCLUDE_REFRESH_DELAY = "monitor_exclude_refresh_delay"
+DEFAULT_MONITOR_EXCLUDE_REFRESH_DELAY = 0 # 默认不延迟
+CONFIG_OPTION_MONITOR_SHA1_PC_SEARCH = "monitor_sha1_pc_search" 
+
+# ==============================================================================
+# ✨ 115 网盘配置 (115 Cloud Drive) 
+# ==============================================================================
+CONFIG_SECTION_115 = "115"
+CONFIG_OPTION_115_SAVE_PATH_CID = "p115_save_path_cid"           # 待整理目录CID
+CONFIG_OPTION_115_SAVE_PATH_NAME = "p115_save_path_name"         # 待整理目录名称
+CONFIG_OPTION_115_UNRECOGNIZED_CID = "p115_unrecognized_cid"     # 未识别目录CID
+CONFIG_OPTION_115_UNRECOGNIZED_NAME = "p115_unrecognized_name"   # 未识别目录名称
+CONFIG_OPTION_115_MEDIA_ROOT_NAME = "p115_media_root_name"       # 网盘媒体库根目录名称
+CONFIG_OPTION_115_INTERVAL = "p115_request_interval"             # API请求间隔
+CONFIG_OPTION_115_MAX_WORKERS = "p115_max_workers"               # API并发线程数
+CONFIG_OPTION_115_API_PRIORITY = "p115_api_priority"             # 115接口优先级（播放 + 整理）：openapi/cookie
+CONFIG_OPTION_115_MP_CLASSIFY = "p115_mp_classify"               # 启用MP分类功能
+CONFIG_OPTION_115_MIN_VIDEO_SIZE = "p115_min_video_size"         # 忽略小视频体积(MB)
+CONFIG_OPTION_115_EXTENSIONS = "p115_extensions"                 # 115转存/上传的文件扩展名列表
+CONFIG_OPTION_115_MEDIA_ROOT_CID = "p115_media_root_cid"         # 115网盘媒体库根目录CID
+CONFIG_OPTION_115_COPY_PLAY_ENABLED = "p115_copy_play_enabled"   # 是否启用复制播放
+CONFIG_OPTION_LOCAL_STRM_ROOT = "local_strm_root"                # 本地生成.strm的根目录
+CONFIG_OPTION_ETK_SERVER_URL = "etk_server_url"                  # ETK服务器地址 (用于strm文件内)
+CONFIG_OPTION_ETK_SERVER_URL_MANUAL = "etk_server_url_manual"    # 手动地址，优先于自动发现
+CONFIG_OPTION_115_ENABLE_SYNC_DELETE = "p115_enable_sync_delete" # 是否联动删除网盘文件
+CONFIG_OPTION_115_MEDIAINFO_ASSISTED_RECOGNITION = "p115_mediainfo_assisted_recognition" # 是否启用MediaInfo辅助识别
+CONFIG_OPTION_115_DOWNLOAD_SUBS = "p115_download_subs"           # 是否下载字幕文件
+CONFIG_OPTION_115_LOCAL_CLEANUP = "p115_local_cleanup"           # 是否启用本地清理功能
+CONFIG_OPTION_115_APP_ID = "p115_app_id"                         # 115 自定义 AppID
+# 共享资源配置不再进入 dynamic_app_config；统一保存到 app_settings.shared_resource_config。
+APP_SETTING_SHARED_RESOURCE_CONFIG = "shared_resource_config"
+
+# ==============================================================================
+# ✨ 通知服务 (Notification Services)
+# ==============================================================================
+CONFIG_SECTION_TELEGRAM = "Telegram"
+CONFIG_OPTION_TELEGRAM_BOT_TOKEN = "telegram_bot_token"
+CONFIG_OPTION_TELEGRAM_CHANNEL_ID = "telegram_channel_id"
+CONFIG_OPTION_TELEGRAM_MENU_TASKS = "tg_menu_tasks"
+DEFAULT_TELEGRAM_MENU_TASKS = [
+    'task-chain-high-freq',       # 高频刷新任务链
+    'task-chain-low-freq',        # 低频维护任务链
+    'scan-organize-115',          # 网盘文件整理
+    'populate-metadata',          # 同步媒体数据
+    'process-watchlist',          # 刷新智能追剧
+    'scan-cleanup-issues',        # 扫描重复媒体
+    'system-auto-update',         # 系统自动更新
+]
+CONFIG_OPTION_TELEGRAM_NOTIFY_TYPES = "telegram_notify_types"      # TG通知类型多选
+DEFAULT_TELEGRAM_NOTIFY_TYPES = ['library_new', 'transfer_success', 'recognize_fail', 'intercept_notify']
+APP_SETTING_TELEGRAM_NOTIFICATION_TEMPLATES = "telegram_notification_templates"
+TELEGRAM_USERBOT_API_ID = 30841166
+TELEGRAM_USERBOT_API_HASH_PLACEHOLDER = "center-managed-login"
+DEFAULT_TELEGRAM_NOTIFICATION_TEMPLATES = {
+    "library_new": "{{ media_icon }} {{ title }} {{ notification_title }}\n\n{{ episode_info }}\n{{ media_params }}\n⏰ *时间*: `{{ time }}`\n📝 *剧情*: {{ overview }}\n{{ review_warning }}",
+    "transfer_success": "{{ action_title }}\n{{ title }}\n\n{{ episode_info }}\n{{ source }}🕒 *时间*: `{{ time }}`\n🎭 *类别*: {{ type }}\n{{ rating }}\n{{ overview }}",
+    "playback": "{{ action }}\n\n👤 *用户*: `{{ user }}`\n🎬 *媒体*: {{ title }}\n📱 *设备*: `{{ device }}（{{ client }}）`\n🕒 *时间*: `{{ time }}`\n{{ overview }}",
+    "recognize_fail": "⚠️ *识别失败通知*\n\n📁 *文件名*: `{{ file_name }}`\n❓ *原因*: {{ reason }}\n🕒 *时间*: `{{ time }}`\n\n💡 _文件已被移入「未识别」目录，请前往 WebUI 手动纠错。_",
+    "intercept_notify": "⛔ *洗版拦截通知*\n\n📁 *拦截文件*: {{ file_names }}\n🚫 *原因*:\n{{ reason }}\n🕒 *时间*: `{{ time }}`\n\n💡 _文件未达到优先级标准，已被标记「质检不合格」。_",
+    "hdhive_checkin": "【{{ status_icon }} *{{ status_title }}*】\n📢 *执行结果*\n\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\n🕒 *时间*: `{{ time }}`\n👤 *用户*: `{{ user }}`\n📍 *模式*: {{ mode }}\n✨ *状态*: {{ status }}\n\n📊 *签到详情*\n💬 *消息*: {{ message }}\n🎁 *奖励*: {{ reward }} 积分",
+}
+
+# ==============================================================================
+# ✨ 反向代理配置 (Reverse Proxy)
+# ==============================================================================
+CONFIG_SECTION_REVERSE_PROXY = "ReverseProxy"
+CONFIG_OPTION_PROXY_ENABLED = "proxy_enabled"
+CONFIG_OPTION_PROXY_PORT = "proxy_port"
+CONFIG_OPTION_PROXY_LOCK_DISCOVERY_ADDRESS = "proxy_lock_discovery_address"
+CONFIG_OPTION_PROXY_DISCOVERY_URL_MANUAL = "proxy_discovery_url_manual"
+CONFIG_OPTION_PROXY_ALLOW_TRANSCODING = "proxy_allow_transcoding"
+CONFIG_OPTION_PROXY_MERGE_NATIVE = "proxy_merge_native_libraries"
+CONFIG_OPTION_PROXY_NATIVE_VIEW_SELECTION = "proxy_native_view_selection"  # List[str]
+CONFIG_OPTION_PROXY_NATIVE_VIEW_ORDER = "proxy_native_view_order"  # str, 'before' or 'after'
+CONFIG_OPTION_PROXY_SHOW_MISSING_PLACEHOLDERS = "proxy_show_missing_placeholders"
+
+# ==============================================================================
+# ✨ Emby 服务器连接配置 (Emby Connection)
+# ==============================================================================
+CONFIG_SECTION_EMBY = "Emby"
+CONFIG_OPTION_EMBY_SERVER_URL = "emby_server_url"       # Emby服务器地址
+CONFIG_OPTION_EMBY_PUBLIC_URL = "emby_public_url"       # Emby公网地址
+CONFIG_OPTION_EMBY_API_KEY = "emby_api_key"             # 内部兼容键，保存管理员服务 Token
+CONFIG_OPTION_EMBY_USER_ID = "emby_user_id"             # 用于操作的Emby用户ID
+CONFIG_OPTION_EMBY_AUTH_MODE = "emby_auth_mode"         # 服务授权模式：user_token 或旧配置空值
+CONFIG_OPTION_EMBY_API_TIMEOUT = "emby_api_timeout"     # Emby API 超时时间 
+CONFIG_OPTION_EMBY_LIBRARIES_TO_PROCESS = "libraries_to_process" # 需要处理的媒体库名称列表
+
+# ==============================================================================
+# ✨ 数据处理流程配置 (Processing Workflow)
+# ==============================================================================
+CONFIG_SECTION_PROCESSING = "Processing"
+CONFIG_OPTION_MAX_ACTORS_TO_PROCESS = "max_actors_to_process"   # 每个媒体项目处理的演员数量上限
+DEFAULT_MAX_ACTORS_TO_PROCESS = 50                              # 默认的演员数量上限
+CONFIG_OPTION_MAX_EPISODE_ACTORS_TO_PROCESS = "max_episode_actors_to_process" # 每集演员处理数量上限，0代表不单独处理分集演员
+DEFAULT_MAX_EPISODE_ACTORS_TO_PROCESS = 0                       # 默认0，代表不单独处理分集演员，直接继承剧集主演员表
+CONFIG_OPTION_EXTRACT_THUMB = "extract_thumb"                   # 是否截取图片
+CONFIG_OPTION_REMOVE_ACTORS_WITHOUT_AVATARS = "remove_actors_without_avatars" # 是否移除无头像的演员
+CONFIG_OPTION_KEYWORD_TO_TAGS = "keyword_to_tags"               # 关键词写入标签 
+CONFIG_OPTION_STUDIO_TO_CHINESE = "studio_to_chinese"           # 是否将工作室/电视网名称转换为中文
+CONFIG_OPTION_MEDIA_IMAGE_ARCHIVE_ENABLED = "media_image_archive_enabled"
+CONFIG_OPTION_MEDIA_IMAGE_ARCHIVE_PATH = "media_image_archive_path"
+
+# ==============================================================================
+# ✨ 外部API与数据源配置 (External APIs & Data Sources)
+# ==============================================================================
+# --- TMDb ---
+CONFIG_SECTION_TMDB = "TMDB"
+CONFIG_OPTION_TMDB_API_KEY = "tmdb_api_key" # TMDb API密钥
+CONFIG_OPTION_TMDB_API_BASE_URL = "tmdb_api_base_url" # TMDb API基础URL
+ENV_VAR_TMDB_API_BASE_URL = "TMDB_API_BASE_URL" # TMDb API基础URL环境变量
+CONFIG_OPTION_TMDB_INCLUDE_ADULT = "tmdb_include_adult" # 是否在搜索中包含成人内容
+CONFIG_OPTION_TMDB_IMAGE_LANGUAGE_PREFERENCE = "tmdb_image_language_preference" 
+# --- GitHub (用于版本检查) ---
+CONFIG_SECTION_GITHUB = "GitHub"
+CONFIG_OPTION_GITHUB_TOKEN = "github_token" # 用于提高API速率限制的个人访问令牌
+CONFIG_OPTION_SYSTEM_UPDATE_STRATEGY = "system_update_strategy"
+CONFIG_OPTION_SYSTEM_UPDATE_HELPER_IMAGE = "system_update_helper_image"
+
+# --- 豆瓣 API ---
+CONFIG_SECTION_API_DOUBAN = "DoubanAPI"
+DOUBAN_API_AVAILABLE = True # 一个硬编码的开关，表示豆瓣API功能是可用的
+CONFIG_OPTION_DOUBAN_DEFAULT_COOLDOWN = "api_douban_default_cooldown_seconds" # 调用豆瓣API的冷却时间
+CONFIG_OPTION_DOUBAN_COOKIE = "douban_cookie" # 用于身份验证的豆瓣登录Cookie
+CONFIG_OPTION_DOUBAN_ENABLE_ONLINE_API = "douban_enable_online_api" # 是否启用豆瓣在线API
+
+# --- AI 翻译 ---
+CONFIG_SECTION_AI_TRANSLATION = "AITranslation"
+CONFIG_OPTION_AI_PROVIDER = "ai_provider"                       # AI服务提供商 (如 'siliconflow', 'openai')
+CONFIG_OPTION_AI_API_KEY = "ai_api_key"                         # AI服务的API密钥
+CONFIG_OPTION_AI_MODEL_NAME = "ai_model_name"                   # 使用的AI模型名称 (如 'Qwen/Qwen2-7B-Instruct')
+CONFIG_OPTION_AI_BASE_URL = "ai_base_url"                       # AI服务的API基础URL
+CONFIG_OPTION_AI_VECTOR = "ai_vector"                           # 是否启用AI向量化功能
+CONFIG_OPTION_AI_TRANSLATION_MODE = "ai_translation_mode"       # AI翻译模式 ('fast' 或 'quality')
+CONFIG_OPTION_AI_TRANSLATE_ACTOR_ROLE = "ai_translate_actor_role"               # 是否翻译演员角色名
+CONFIG_OPTION_AI_TRANSLATE_TITLE = "ai_translate_title"         # 是否翻译标题
+CONFIG_OPTION_AI_TRANSLATE_OVERVIEW = "ai_translate_overview"   # 是否翻译简介
+CONFIG_OPTION_AI_TRANSLATE_EPISODE_OVERVIEW = "ai_translate_episode_overview"   # 是否翻译集简介
+CONFIG_OPTION_AI_RECOGNITION = "ai_recognition"                 # 是否启用AI辅助识别
+CONFIG_OPTION_AI_JOKE_FALLBACK = "ai_joke_fallback"             # 剧集无简介生成小笑话
+
+
+# ==============================================================================
+# ✨ 网络配置 (Network) - ★★★ 新增部分 ★★★
+# ==============================================================================
+CONFIG_SECTION_NETWORK = "Network"
+CONFIG_OPTION_NETWORK_PROXY_ENABLED = "network_proxy_enabled"
+CONFIG_OPTION_NETWORK_HTTP_PROXY = "network_http_proxy_url"
+
+# ==============================================================================
+# ✨ 计划任务配置 (Scheduler)
+# ==============================================================================
+CONFIG_SECTION_SCHEDULER = "Scheduler"
+
+# --- 高频任务链 ---
+CONFIG_OPTION_TASK_CHAIN_ENABLED = "task_chain_enabled"
+CONFIG_OPTION_TASK_CHAIN_CRON = "task_chain_cron"
+CONFIG_OPTION_TASK_CHAIN_SEQUENCE = "task_chain_sequence"
+CONFIG_OPTION_TASK_CHAIN_MAX_RUNTIME_MINUTES = "task_chain_max_runtime_minutes"
+
+# --- 低频任务链配置 ---
+CONFIG_OPTION_TASK_CHAIN_LOW_FREQ_ENABLED = "task_chain_low_freq_enabled"
+CONFIG_OPTION_TASK_CHAIN_LOW_FREQ_CRON = "task_chain_low_freq_cron"
+CONFIG_OPTION_TASK_CHAIN_LOW_FREQ_SEQUENCE = "task_chain_low_freq_sequence"
+CONFIG_OPTION_TASK_CHAIN_LOW_FREQ_MAX_RUNTIME_MINUTES = "task_chain_low_freq_max_runtime_minutes"
+
+
+
+# --- 演员前缀 ---
+CONFIG_SECTION_ACTOR = "Actor"
+CONFIG_OPTION_ACTOR_ROLE_ADD_PREFIX = "actor_role_add_prefix"
+CONFIG_OPTION_ACTOR_MAIN_ROLE_ONLY = "actor_main_role_only"
+
+
+# --- 日志配置 ---
+CONFIG_SECTION_LOGGING = "Logging"
+CONFIG_OPTION_LOG_ROTATION_SIZE_MB = "log_rotation_size_mb"
+CONFIG_OPTION_LOG_ROTATION_BACKUPS = "log_rotation_backup_count"
+DEFAULT_LOG_ROTATION_SIZE_MB = 5
+DEFAULT_LOG_ROTATION_BACKUPS = 10
+# ==============================================================================
+# ✨ 内部常量与映射 (Internal Constants & Mappings)
+# ==============================================================================
+# --- 用户认证 (如果未来启用) ---
+CONFIG_SECTION_AUTH = "Authentication"
+CONFIG_OPTION_AUTH_ENABLED = "auth_enabled"
+CONFIG_OPTION_AUTH_USERNAME = "username"
+DEFAULT_USERNAME = "admin"
+
+# --- 语言代码 ---
+CHINESE_LANG_CODES = ["zh", "zh-cn", "zh-hans", "cmn", "yue", "cn", "zh-sg", "zh-tw", "zh-hk"]
+
+# --- 状态文本映射 (可能用于UI显示) ---
+ACTOR_STATUS_TEXT_MAP = {
+    "ok": "已处理",
+    "name_untranslated": "演员名未翻译",
+    "character_untranslated": "角色名未翻译",
+    "name_char_untranslated": "演员名和角色名均未翻译",
+    "pending_translation": "待翻译",
+    "parent_failed": "媒体项处理失败",
+    "unknown": "未知状态"
+}
+
+# --- 数据源信息映射 (可能用于动态构建UI或逻辑) ---
+SOURCE_API_MAP = {
+    "Douban": {
+        "name": "豆瓣",
+        "search_types": {
+            "movie": {"title": "电影", "season": False},
+            "tv": {"title": "电视剧", "season": True},
+        },
+    },
+}

@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+venv/**
+
+# 运行时数据（含翻译缓存、敏感配置）
+etk.db
+etk.db-*
+*.db
+*.db-shm
+*.db-wal
+config/
+*.log
+auto_run.log
+
+# 本机调试脚本（含硬编码密码）
+auto_translate.sh
+
+# 环境变量/密钥
+.env
+*.env
+
+# IDE / 系统
+.vscode/
+.idea/
+.DS_Store
