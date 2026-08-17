@@ -267,6 +267,22 @@ class EmbyAPI:
         for k, v in updates.items():
             if v is not None:
                 full[k] = v
+        # ★ 对齐原版 handler/emby.py：踢除 Emby 生成的干扰字段。
+        # 这些字段带回去会导致 Tags/People 等更新失效或被覆盖（People 显式更新时保留）。
+        black_list = [
+            "TagItems",       # 标签对象列表（Tags 的死对头）
+            "MediaStreams",   # 媒体流信息
+            "MediaSources",
+            "Chapters",
+            "RecursiveItemCount",
+            "ChildCount",
+            "ImageTags",
+            "SeriesTimerId",
+            "RunTimeTicks",
+        ]
+        for key in black_list:
+            if key not in updates:
+                full.pop(key, None)
         # 3. POST 完整对象回写
         try:
             r = requests.post(f"{self.url}/Items/{item_id}",

@@ -23,6 +23,7 @@ from database import connection
 from tasks.helpers import translate_tmdb_metadata_recursively
 from emby_api import EmbyAPI
 from handler.douban import DoubanApi
+import utils
 
 
 class TranslateService:
@@ -92,9 +93,11 @@ class TranslateService:
             "tagline": (item.get("Taglines") or [""])[0] if item.get("Taglines") else "",
             "release_date": str(item.get("ProductionYear") or ""),
             "credits": {
-                "cast": [{"name": p.get("Name"), "character": p.get("Role")}
+                "cast": [{"name": p.get("Name"), "character": p.get("Role"),
+                          "emby_person_id": p.get("Id"), "person": p}
                          for p in people if p.get("Type") == "Actor"][:30],
-                "crew": [{"name": p.get("Name")}
+                "crew": [{"name": p.get("Name"), "job": p.get("Type"),
+                          "emby_person_id": p.get("Id"), "person": p}
                          for p in people if p.get("Type") in ("Director", "Writer")][:8],
             },
         }
@@ -149,15 +152,18 @@ class TranslateService:
             return
         credits = data.setdefault("credits", {})
         existing = credits.get("cast") or []
-        # 建立 Emby/TMDb 已有演员的英文名索引（用于对齐校验）
+        # 建立 Emby/TMDb 已有演员的英文名索引（用于对齐校验）+ 英文名→演员映射（继承 emby_person_id）
         existing_en = set()
+        existing_by_en = {}
         for a in existing:
             key = (a.get("name") or "").strip().lower()
             if key:
                 existing_en.add(key)
+                existing_by_en.setdefault(key, a)
             orig = (a.get("original_name") or "").strip().lower()
             if orig:
                 existing_en.add(orig)
+                existing_by_en.setdefault(orig, a)
         merged = []
         seen = set()
         for d_actor in douban_cast:
@@ -166,6 +172,7 @@ class TranslateService:
                 continue
             # ★ 对齐校验：豆瓣演员英文名必须与已有演员匹配
             d_orig = (d_actor.get("original_name") or "").strip().lower()
+            matched = existing_by_en.get(d_orig) if d_orig else None
             if d_orig and existing_en and d_orig not in existing_en:
                 logger.debug(f"[豆瓣] 跳过不匹配演员: {d_name} (英文名 {d_orig} 不在现有演员中)")
                 continue
@@ -175,6 +182,9 @@ class TranslateService:
                 "original_name": d_actor.get("original_name") or d_name,
                 "order": d_actor.get("order", len(merged)),
                 "profile_path": d_actor.get("profile_path"),
+                # ★ 继承匹配到的 Emby 演员的 Person ID，供翻译后写回 People 精确匹配
+                "emby_person_id": (matched or {}).get("emby_person_id"),
+                "person": (matched or {}).get("person"),
             })
             seen.add(d_name.lower())
         # 补充未在豆瓣的 TMDb 演员（保留原有顺序）
@@ -184,6 +194,52 @@ class TranslateService:
                 merged.append(a)
                 seen.add(key)
         credits["cast"] = merged[:30]
+
+    def _build_people_writeback(self, item: dict, data: dict):
+        """翻译后：把翻译好的演员名/角色名写回 Emby 的 People 字段。
+        安全网（对齐原版 _update_emby_person_names）：
+        - 只改翻译后【含中文】的名字/角色名（白名单，不覆盖用户手动改的）
+        - 只改确实变化的（Diff）
+        - 保留头像 PrimaryImageTag / PersonId / ProviderIds / order 等其他字段
+        - 角色名清理"饰/配/as"前后缀（对齐原版 clean_character_name_static）
+        返回新的 People 列表；无变化返回 None。
+        """
+        people = item.get("People") or []
+        if not people:
+            return None
+        # person_id -> 翻译后项（cast=演员，crew=导演/编剧）
+        trans_by_id = {}
+        for grp in ("cast", "crew"):
+            for a in (data.get("credits") or {}).get(grp) or []:
+                pid = a.get("emby_person_id")
+                if pid:
+                    trans_by_id.setdefault(str(pid), a)
+        if not trans_by_id:
+            return None
+        # 判断是否动画（角色名空时原版填"配音/演员"，此处暂不强填，仅清理前缀）
+        changed = False
+        new_people = []
+        for p in people:
+            t = trans_by_id.get(str(p.get("Id") or ""))
+            if not t:
+                new_people.append(p)
+                continue
+            np_ = dict(p)  # 浅拷贝，避免污染原 item
+            # 演员/导演名：翻译后含中文才写
+            new_name = (t.get("name") or "").strip()
+            if new_name and self._has_cn(new_name) and new_name != p.get("Name"):
+                np_["Name"] = new_name
+                changed = True
+            # 角色名（仅 Actor）：翻译后含中文才写，清理"饰/配/as"前后缀
+            if p.get("Type") == "Actor":
+                new_role = (t.get("character") or "").strip()
+                if new_role:
+                    new_role = utils.clean_character_name_static(new_role)
+                if new_role and self._has_cn(new_role) and new_role != p.get("Role"):
+                    np_["Role"] = new_role
+                    changed = True
+            new_people.append(np_)
+        return new_people if changed else None
 
     def needs_translation(self, item: dict) -> bool:
         name = item.get("Name") or ""
@@ -244,6 +300,16 @@ class TranslateService:
             updates["Name"] = new_title
         if data.get("overview") and data["overview"] != before_ov:
             updates["Overview"] = data["overview"]
+
+        # ★ 演员翻译写回：把翻译好的演员名+角色名写回 Emby People（原版 _process_cast_list 精简）
+        # 安全网：只写翻译后含中文且确实变化的，保留头像/PersonId/顺序；角色名清"饰/配"前缀
+        if config_manager.APP_CONFIG.get("ai_translate_actor_role", False):
+            try:
+                people_writeback = self._build_people_writeback(item, data)
+                if people_writeback:
+                    updates["People"] = people_writeback
+            except Exception as e:
+                logger.warning(f"演员写回构建失败（跳过，不影响标题/简介）: {e}")
 
         if not updates:
             # 无需变化也标记已处理（避免重复扫描烧 AI）
